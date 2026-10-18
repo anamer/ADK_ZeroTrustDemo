@@ -1,0 +1,417 @@
+<!doctype html>
+<!--
+  SPDX-License-Identifier: MIT
+  Copyright (c) 2026 Contributors
+
+  DISCLAIMER: THIS FILE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS HAVE ANY RESPONSIBILITY
+  OR LIABILITY FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM, OUT OF,
+  OR IN CONNECTION WITH THIS FILE OR THE SOFTWARE OR THE USE OR OTHER DEALINGS
+  IN THE SOFTWARE.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- TODO(security): Standalone single-file educational bundle; for hosted deployment, replace inline script/style with external bundles or per-request cryptographic nonces. -->
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; object-src 'none'; base-uri 'self';"
+  />
+  <title>ADK Attestation Ledger — Standalone Interactive Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+  <style>
+    :root {
+      --bg-deep: #0a0d16;
+      --bg-panel: rgba(15, 21, 36, 0.88);
+      --bg-card: rgba(19, 26, 44, 0.92);
+      --border-subtle: rgba(148, 163, 184, 0.16);
+      --border-cyan: rgba(56, 189, 248, 0.45);
+      --text-primary: #f8fafc;
+      --text-secondary: #cbd5e1;
+      --text-muted: #94a3b8;
+      --cyan: #38bdf8;
+      --indigo: #6366f1;
+      --emerald: #10b981;
+      --amber: #f59e0b;
+      --rose: #f43f5e;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-deep);
+      background-image:
+        radial-gradient(circle at 12% 10%, rgba(56, 189, 248, 0.08), transparent 32%),
+        radial-gradient(circle at 88% 15%, rgba(99, 102, 241, 0.08), transparent 35%);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      min-block-size: 100dvh;
+      inline-size: 100%;
+      overflow-x: clip;
+    }
+    svg.arch-svg, svg.merkle-svg {
+      display: block;
+      inline-size: 100%;
+      block-size: auto;
+    }
+    .app-shell { display: flex; flex-direction: column; block-size: 100dvh; inline-size: 100%; }
+    .top-header {
+      display: flex; align-items: safe center; justify-content: space-between;
+      flex-wrap: wrap; gap: 0.75rem; padding: 0.65rem 1.1rem;
+      background: rgba(11, 15, 27, 0.94); border-block-end: 1px solid var(--border-subtle);
+    }
+    .brand-block { display: flex; align-items: center; gap: 0.7rem; min-inline-size: 0; }
+    .brand-icon-wrap {
+      display: grid; place-content: center; inline-size: 36px; block-size: 36px;
+      border-radius: 10px; background: rgba(56, 189, 248, 0.16);
+      border: 1px solid var(--border-cyan); color: var(--cyan); font-weight: 800;
+    }
+    .brand-title { font-size: 1rem; font-weight: 800; color: #fff; }
+    .version-pill {
+      font-family: var(--font-mono); font-size: 0.68rem; font-weight: 600;
+      padding: 0.12rem 0.45rem; border-radius: 999px;
+      background: rgba(56, 189, 248, 0.14); color: var(--cyan);
+      border: 1px solid rgba(56, 189, 248, 0.35); margin-inline-start: 0.45rem;
+    }
+    .brand-subtitle { font-size: 0.72rem; color: var(--text-muted); }
+    .scenario-bar {
+      display: flex; flex-wrap: wrap; flex-wrap: balance; gap: 0.35rem;
+      background: rgba(15, 23, 42, 0.75); padding: 0.28rem;
+      border-radius: 10px; border: 1px solid var(--border-subtle);
+    }
+    .scenario-tab {
+      padding: 0.36rem 0.62rem; border-radius: 7px; border: 1px solid transparent;
+      background: transparent; color: var(--text-secondary);
+      font-family: var(--font-sans); font-size: 0.73rem; font-weight: 600; cursor: pointer;
+    }
+    .scenario-tab.active.is-safe {
+      background: rgba(16, 185, 129, 0.16); border-color: rgba(16, 185, 129, 0.55); color: #6ee7b7;
+    }
+    .scenario-tab.active.is-attack {
+      background: rgba(244, 63, 94, 0.18); border-color: rgba(244, 63, 94, 0.6); color: #fda4af;
+    }
+    .auth-context-group { display: flex; align-items: center; gap: 0.6rem; }
+    .target-select {
+      background: #0f172a; color: var(--cyan); border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 6px; padding: 0.28rem 0.5rem; font-size: 0.74rem; font-weight: 600;
+    }
+    .gcp-auth-badge {
+      display: flex; align-items: center; gap: 0.45rem; padding: 0.3rem 0.6rem;
+      border-radius: 8px; background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.32); color: var(--text-primary);
+      font-family: var(--font-mono); font-size: 0.68rem;
+    }
+    .workbench-grid { display: flex; flex: 1 1 0%; min-block-size: 0; inline-size: 100%; }
+    .panel {
+      display: flex; flex-direction: column; background: var(--bg-panel);
+      min-block-size: 0; min-inline-size: 0;
+    }
+    .left-panel { inline-size: 320px; flex-shrink: 0; overflow-y: auto; scrollbar-gutter: stable; overscroll-behavior: contain; border-inline-end: 1px solid var(--border-subtle); }
+    .center-panel { flex: 1 1 0%; overflow-y: auto; scrollbar-gutter: stable; overscroll-behavior: contain; padding: 1rem; gap: 0.9rem; }
+    .right-panel { inline-size: 400px; flex-shrink: 0; overflow-y: auto; scrollbar-gutter: stable; overscroll-behavior: contain; border-inline-start: 1px solid var(--border-subtle); }
+    .panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.7rem 0.9rem; border-block-end: 1px solid var(--border-subtle);
+      background: rgba(10, 14, 24, 0.75); font-size: 0.82rem; font-weight: 700;
+    }
+    .stepper-list { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.75rem; }
+    .step-card {
+      padding: 0.6rem 0.7rem; border-radius: 8px; background: rgba(19, 27, 46, 0.65);
+      border: 1px solid var(--border-subtle); cursor: pointer;
+    }
+    .step-card.current { border-color: var(--cyan); background: rgba(14, 116, 144, 0.18); }
+    .step-micro-badge { font-family: var(--font-mono); font-size: 0.62rem; color: var(--cyan); font-weight: 700; }
+    .step-card-title { font-size: 0.79rem; font-weight: 700; margin-block-start: 0.15rem; }
+    .step-card-summary { font-size: 0.71rem; color: var(--text-secondary); margin-block-start: 0.35rem; line-height: 1.4; }
+    .viz-card {
+      background: var(--bg-card); border: 1px solid var(--border-subtle);
+      border-radius: 12px; padding: 0.85rem 1rem; display: flex; flex-direction: column; gap: 0.7rem;
+    }
+    .viz-card h3 { font-size: 0.86rem; font-weight: 700; color: #fff; }
+    .pillars-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 0.7rem; }
+    .pillar-card {
+      padding: 0.7rem; border-radius: 9px; background: rgba(13, 19, 33, 0.9);
+      border: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 0.35rem; min-inline-size: 0;
+    }
+    .pillar-card.ok { border-color: rgba(16, 185, 129, 0.4); }
+    .pillar-card.fail { border-color: rgba(244, 63, 94, 0.75); background: rgba(59, 10, 20, 0.35); }
+    .pillar-card h4 { font-size: 0.8rem; color: #fff; }
+    .pillar-kv { font-family: var(--font-mono); font-size: 0.67rem; color: #cbd5e1; overflow-wrap: anywhere; background: #070a12; padding: 0.3rem 0.45rem; border-radius: 5px; }
+    .json-code-block {
+      background: #070a12; border: 1px solid var(--border-subtle); border-radius: 8px;
+      padding: 0.75rem; font-family: var(--font-mono); font-size: 0.69rem;
+      line-height: 1.45; color: #e2e8f0; overflow-x: auto; white-space: pre; margin: 0.75rem;
+    }
+    .banner { padding: 0.8rem 1rem; border-radius: 10px; border: 1px solid; }
+    .banner.safe { background: rgba(6, 78, 59, 0.35); border-color: #10b981; }
+    .banner.blocked { background: rgba(76, 5, 25, 0.45); border-color: #f43f5e; }
+  </style>
+</head>
+<body>
+  <div id="standalone-app" class="app-shell"></div>
+  <script>
+    // Pure deterministic SHA-256 (FIPS 180-4)
+    function sha256Hex(ascii) {
+      function rightRotate(value, amount) { return (value >>> amount) | (value << (32 - amount)); }
+      var mathPow = Math.pow, maxWord = mathPow(2, 32), i, j, result = '';
+      var words = [], asciiBitLength = ascii.length * 8;
+      var hash = sha256Hex.h = sha256Hex.h || [], k = sha256Hex.k = sha256Hex.k || [];
+      var primeCounter = k.length, isComposite = {};
+      for (var candidate = 2; primeCounter < 64; candidate++) {
+        if (!isComposite[candidate]) {
+          for (i = 0; i < 313; i += candidate) isComposite[i] = candidate;
+          hash[primeCounter] = (mathPow(candidate, 0.5) * maxWord) | 0;
+          k[primeCounter++] = (mathPow(candidate, 1 / 3) * maxWord) | 0;
+        }
+      }
+      ascii += '\x80';
+      while ((ascii.length % 64) - 56) ascii += '\x00';
+      for (i = 0; i < ascii.length; i++) {
+        j = ascii.charCodeAt(i);
+        words[i >> 2] |= j << ((3 - (i % 4)) * 8);
+      }
+      words[words.length] = (asciiBitLength / maxWord) | 0;
+      words[words.length] = asciiBitLength;
+      for (j = 0; j < words.length;) {
+        var w = words.slice(j, (j += 16)), oldHash = hash;
+        hash = hash.slice(0, 8);
+        for (i = 0; i < 64; i++) {
+          var w15 = w[i - 15], w2 = w[i - 2], a = hash[0], e = hash[4];
+          var temp1 = hash[7] + (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25)) +
+            ((e & hash[5]) ^ (~e & hash[6])) + k[i] +
+            (w[i] = i < 16 ? w[i] : (w[i - 16] + (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3)) + w[i - 7] + (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10))) | 0);
+          var temp2 = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)) + ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]));
+          hash = [(temp1 + temp2) | 0].concat(hash);
+          hash[4] = (hash[4] + temp1) | 0;
+        }
+        for (i = 0; i < 8; i++) hash[i] = (hash[i] + oldHash[i]) | 0;
+      }
+      for (i = 0; i < 8; i++) {
+        for (j = 3; j + 1; j--) {
+          var b = (hash[i] >> (j * 8)) & 255;
+          result += (b < 16 ? 0 : '') + b.toString(16);
+        }
+      }
+      return result;
+    }
+
+    function el(tag, className, text) {
+      var node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    }
+
+    var state = { scenarioIdx: 0, stepIdx: 6, target: 'Database Write-Proxy (us-central1)' };
+
+    var scenarios = [
+      {
+        name: 'Authorized Tool Call',
+        attack: false,
+        desc: 'Decoupled execution: ADK runtime generates a signed 4-pillar receipt anchored in the SCITT Merkle tree. Downstream verifier confirms all 5 cryptographic checks.',
+        spiffe: 'spiffe://example.com/ns/adk-prod/sa/finops-reconciler-agent',
+        sigValid: true,
+        params: '{"query":"UPDATE billing_reconciliation SET status = $1 WHERE project_id = $2","params":["RECONCILED","acme-adk-prod"],"max_rows":1}',
+        wireParams: '{"query":"UPDATE billing_reconciliation SET status = $1 WHERE project_id = $2","params":["RECONCILED","acme-adk-prod"],"max_rows":1}',
+        verdict: 'ALLOW',
+        nonce: '0x9f4c8a21e7b03d55 (RFC 9334 Fresh, 18ms < 15000ms TTL)',
+        nonceFresh: true,
+        merkleValid: true
+      },
+      {
+        name: 'Prompt Injection Attack',
+        attack: true,
+        desc: 'Untrusted invoice injects DROP TABLE command into LLM context. Probabilistic reasoning emits destructive intent, but Deterministic Policy Gateway signs DENY.',
+        spiffe: 'spiffe://example.com/ns/adk-prod/sa/finops-reconciler-agent',
+        sigValid: true,
+        params: '{"query":"DROP TABLE billing_reconciliation CASCADE;","params":[],"max_rows":99999}',
+        wireParams: '{"query":"DROP TABLE billing_reconciliation CASCADE;","params":[],"max_rows":99999}',
+        verdict: 'DENY',
+        nonce: '0x3b7e19c4a820f6d1 (RFC 9334 Fresh)',
+        nonceFresh: true,
+        merkleValid: true
+      },
+      {
+        name: 'Replay Attack (Stale Nonce)',
+        attack: true,
+        desc: 'Attacker replays a captured ALLOW receipt 92 seconds later. Downstream verifier rejects the expired/spent RFC 9334 RATS freshness nonce.',
+        spiffe: 'spiffe://example.com/ns/adk-prod/sa/finops-reconciler-agent',
+        sigValid: true,
+        params: '{"query":"UPDATE billing_reconciliation SET status = $1 WHERE project_id = $2","params":["RECONCILED","acme-adk-prod"],"max_rows":1}',
+        wireParams: '{"query":"UPDATE billing_reconciliation SET status = $1 WHERE project_id = $2","params":["RECONCILED","acme-adk-prod"],"max_rows":1}',
+        verdict: 'ALLOW',
+        nonce: '0x11a04f88c3e271d9 (EXPIRED +92,400ms > 15,000ms TTL)',
+        nonceFresh: false,
+        merkleValid: true
+      },
+      {
+        name: 'Lateral Movement (Forged Key)',
+        attack: true,
+        desc: 'Compromised adjacent pod calls downstream proxy directly without a valid Cloud KMS Ed25519 / SPIFFE SVID Agent Passport signature.',
+        spiffe: 'spiffe://untrusted-pod.local/ns/default/sa/compromised-worker',
+        sigValid: false,
+        params: '{"query":"UPDATE billing_reconciliation SET status = $1","params":["HACKED"]}',
+        wireParams: '{"query":"UPDATE billing_reconciliation SET status = $1","params":["HACKED"]}',
+        verdict: 'ALLOW',
+        nonce: '0x6c2e91f0b4a83d77 (RFC 9334 Fresh)',
+        nonceFresh: true,
+        merkleValid: true
+      },
+      {
+        name: 'Merkle / Payload Tampering',
+        attack: true,
+        desc: 'MITM alters wire payload after receipt signing. SHA-256 input digest and SCITT Merkle Inclusion Proof fail mathematical verification.',
+        spiffe: 'spiffe://example.com/ns/adk-prod/sa/finops-reconciler-agent',
+        sigValid: true,
+        params: '{"query":"UPDATE billing_reconciliation SET amount = 42.50 WHERE project_id = $1","params":["acme-adk-prod"]}',
+        wireParams: '{"query":"UPDATE billing_reconciliation SET amount = 4250000.00 WHERE project_id = $1","params":["acme-adk-prod"]}',
+        verdict: 'ALLOW',
+        nonce: '0x5a8d30e2f194c7b6 (RFC 9334 Fresh)',
+        nonceFresh: true,
+        merkleValid: false
+      }
+    ];
+
+    var steps = [
+      { title: '1. Probabilistic LLM Reasoning', badge: 'TRUST SPLIT', text: 'LLMs are susceptible to prompt injection & hallucination; ADK removes ambient execution authority.' },
+      { title: '2. Agent Identity (Ed25519/SPIFFE)', badge: 'PILLAR 1', text: 'Binds action intent to SPIFFE SVID and Cloud KMS Ed25519 signature.' },
+      { title: '3. Input/Output SHA-256 Digests', badge: 'PILLAR 2', text: 'Computes SHA-256 hashes over prompt context, tool parameters, and response payload.' },
+      { title: '4. Deterministic Policy Proof', badge: 'PILLAR 3', text: 'External Cedar/OPA gateway evaluates invariants and signs ALLOW or DENY.' },
+      { title: '5. RFC 9334 RATS Liveness Nonce', badge: 'PILLAR 4', text: 'Embeds freshness challenge nonce and strict TTL to block replay attacks.' },
+      { title: '6. SCITT Hash-Chain & Merkle Tree', badge: 'MERKLE LOG', text: 'Chains receipt to prior hash and anchors leaf in a Distributed Merkle Tree.' },
+      { title: '7. Independent Downstream Verifier', badge: 'ZERO TRUST', text: 'DB Proxy / K8s Admission / API Gateway verifies math proof before state change.' }
+    ];
+
+    function render() {
+      var root = document.getElementById('standalone-app');
+      root.replaceChildren();
+      var scen = scenarios[state.scenarioIdx];
+      var signedHash = sha256Hex(scen.params);
+      var wireHash = sha256Hex(scen.wireParams);
+      var digestMatch = signedHash === wireHash;
+      var merkleRoot = sha256Hex('scitt-root-' + signedHash);
+      var recomputedRoot = scen.merkleValid && digestMatch ? merkleRoot : sha256Hex('tampered-' + wireHash);
+      var allPassed = scen.sigValid && digestMatch && scen.verdict === 'ALLOW' && scen.nonceFresh && (merkleRoot === recomputedRoot);
+
+      // Header
+      var header = el('header', 'top-header');
+      var brand = el('div', 'brand-block');
+      brand.appendChild(el('div', 'brand-icon-wrap', '🛡️'));
+      var brandText = el('div');
+      var titleRow = el('div');
+      var h1 = el('span', 'brand-title', 'ADK Attestation Ledger');
+      var pill = el('span', 'version-pill', 'Standalone Bundle');
+      titleRow.appendChild(h1);
+      titleRow.appendChild(pill);
+      brandText.appendChild(titleRow);
+      brandText.appendChild(el('p', 'brand-subtitle', 'Decoupling Probabilistic LLM Reasoning from Execution Authority'));
+      brand.appendChild(brandText);
+      header.appendChild(brand);
+
+      var scenBar = el('div', 'scenario-bar');
+      scenarios.forEach(function(s, idx) {
+        var btn = el('button', 'scenario-tab ' + (idx === state.scenarioIdx ? 'active ' : '') + (s.attack ? 'is-attack' : 'is-safe'), s.name);
+        btn.onclick = function() { state.scenarioIdx = idx; render(); };
+        scenBar.appendChild(btn);
+      });
+      header.appendChild(scenBar);
+
+      var authGroup = el('div', 'auth-context-group');
+      authGroup.appendChild(el('div', 'gcp-auth-badge', 'ad***@example.com • acme-adk-prod • us-central1'));
+      header.appendChild(authGroup);
+      root.appendChild(header);
+
+      // Main Grid
+      var main = el('main', 'workbench-grid');
+
+      // Left Panel
+      var left = el('aside', 'panel left-panel');
+      left.appendChild(el('div', 'panel-header', 'Attestation Lifecycle Steps'));
+      var stepList = el('div', 'stepper-list');
+      steps.forEach(function(st, idx) {
+        var card = el('div', 'step-card ' + (idx === state.stepIdx ? 'current' : ''));
+        card.onclick = function() { state.stepIdx = idx; render(); };
+        card.appendChild(el('div', 'step-micro-badge', st.badge));
+        card.appendChild(el('div', 'step-card-title', st.title));
+        card.appendChild(el('div', 'step-card-summary', st.text));
+        stepList.appendChild(card);
+      });
+      left.appendChild(stepList);
+      main.appendChild(left);
+
+      // Center Panel
+      var center = el('section', 'panel center-panel');
+      var banner = el('div', 'banner ' + (allPassed ? 'safe' : 'blocked'));
+      banner.appendChild(el('h3', '', (allPassed ? '✓ EXECUTION AUTHORIZED: ' : '✗ EXECUTION BLOCKED: ') + scen.name));
+      banner.appendChild(el('p', 'step-card-summary', scen.desc));
+      center.appendChild(banner);
+
+      var pillarsBox = el('div', 'viz-card');
+      pillarsBox.appendChild(el('h3', '', 'Cryptographic Action Receipt (4 Pillars + SCITT Merkle Proof)'));
+      var pGrid = el('div', 'pillars-grid');
+
+      var p1 = el('div', 'pillar-card ' + (scen.sigValid ? 'ok' : 'fail'));
+      p1.appendChild(el('h4', '', '1. Agent Identity (Ed25519 / SPIFFE)'));
+      p1.appendChild(el('div', 'pillar-kv', 'SVID: ' + scen.spiffe));
+      p1.appendChild(el('div', 'pillar-kv', 'Status: ' + (scen.sigValid ? 'Verified KMS Key' : 'INVALID / FORGED KEY')));
+      pGrid.appendChild(p1);
+
+      var p2 = el('div', 'pillar-card ' + (digestMatch ? 'ok' : 'fail'));
+      p2.appendChild(el('h4', '', '2. I/O SHA-256 Digests'));
+      p2.appendChild(el('div', 'pillar-kv', 'Signed SHA256: ' + signedHash.slice(0, 28) + '...'));
+      p2.appendChild(el('div', 'pillar-kv', 'Wire SHA256:   ' + wireHash.slice(0, 28) + '...'));
+      pGrid.appendChild(p2);
+
+      var p3 = el('div', 'pillar-card ' + (scen.verdict === 'ALLOW' ? 'ok' : 'fail'));
+      p3.appendChild(el('h4', '', '3. Policy Decision Proof'));
+      p3.appendChild(el('div', 'pillar-kv', 'Verdict: ' + scen.verdict));
+      p3.appendChild(el('div', 'pillar-kv', 'Engine: ADK Cedar Policy Gateway v3.2'));
+      pGrid.appendChild(p3);
+
+      var p4 = el('div', 'pillar-card ' + (scen.nonceFresh ? 'ok' : 'fail'));
+      p4.appendChild(el('h4', '', '4. Liveness Proof (RFC 9334 RATS)'));
+      p4.appendChild(el('div', 'pillar-kv', 'Nonce: ' + scen.nonce));
+      pGrid.appendChild(p4);
+
+      pillarsBox.appendChild(pGrid);
+      center.appendChild(pillarsBox);
+
+      var merkleBox = el('div', 'viz-card');
+      merkleBox.appendChild(el('h3', '', 'Hash-Chained & SCITT Merkle Inclusion Verification'));
+      merkleBox.appendChild(el('div', 'pillar-kv', 'Signed SCITT Merkle Root:     ' + merkleRoot));
+      merkleBox.appendChild(el('div', 'pillar-kv', 'Downstream Recomputed Root:   ' + recomputedRoot));
+      center.appendChild(merkleBox);
+      main.appendChild(center);
+
+      // Right Panel
+      var right = el('aside', 'panel right-panel');
+      right.appendChild(el('div', 'panel-header', 'Live SCITT Receipt JSON'));
+      var receiptObj = {
+        receipt_id: 'rcpt-scitt-0004',
+        project_id: 'acme-adk-prod',
+        region: 'us-central1',
+        agent_identity: { spiffe_svid: scen.spiffe, signature_valid: scen.sigValid },
+        io_digests: { signed_params_sha256: signedHash, wire_params_sha256: wireHash, match: digestMatch },
+        policy_proof: { verdict: scen.verdict, engine: 'ADK Deterministic Policy Gateway' },
+        liveness_proof: { rats_nonce: scen.nonce, fresh: scen.nonceFresh },
+        scitt_merkle_proof: { signed_root: merkleRoot, recomputed_root: recomputedRoot, valid: merkleRoot === recomputedRoot },
+        downstream_verifier_decision: allPassed ? 'COMMIT_STATE_CHANGE' : 'REJECT_AND_QUARANTINE'
+      };
+      right.appendChild(el('pre', 'json-code-block', JSON.stringify(receiptObj, null, 2)));
+      main.appendChild(right);
+
+      root.appendChild(main);
+    }
+
+    render();
+  </script>
+</body>
+</html>
