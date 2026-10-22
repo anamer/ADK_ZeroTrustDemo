@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: MIT
+  Copyright (c) 2026 Contributors
+
+  DISCLAIMER: THIS FILE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS HAVE ANY RESPONSIBILITY
+  OR LIABILITY FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM, OUT OF,
+  OR IN CONNECTION WITH THIS FILE OR THE SOFTWARE OR THE USE OR OTHER DEALINGS
+  IN THE SOFTWARE.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Google ADK Attestation Ledger — Cross-Boundary A2A ZTA</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #090d16;
+      color: #f1f5f9;
+      overflow-x: hidden;
+    }
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    /* Strictly static node sizing - only smooth stroke color transitions */
+    .svg-node {
+      transition: stroke 0.2s ease, filter 0.2s ease;
+    }
+    @keyframes dashFlow {
+      to { stroke-dashoffset: -20; }
+    }
+    .edge-flow {
+      stroke-dasharray: 5 5;
+      animation: dashFlow 0.8s linear infinite;
+    }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-[#090d16] text-slate-100 select-none">
+
+  <!-- 1. CLEAN TOP HEADER -->
+  <header class="border-b border-slate-800 bg-slate-900/95 px-6 py-3 flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-cyan-500/15 border border-cyan-500/40 flex items-center justify-center text-cyan-400 font-bold mono text-xs">
+        ZTA
+      </div>
+      <div>
+        <h1 class="text-sm md:text-base font-bold text-white tracking-tight">
+          Google ADK Attestation Ledger — Cross-Boundary A2A ZTA
+        </h1>
+        <p class="text-[11px] text-slate-400">
+          Ed25519 Asymmetric Lineage Verification &amp; Local Cloud KMS Hybrid Envelope Encryption
+        </p>
+      </div>
+    </div>
+
+    <!-- Scenario Mode Selector Buttons -->
+    <div class="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+      <button id="btn-mode-valid" onclick="setScenario('valid')" class="px-3 py-1.5 rounded-md text-xs font-semibold transition-colors">
+        Valid ZTA Flow
+      </button>
+      <button id="btn-mode-attack" onclick="setScenario('attack')" class="px-3 py-1.5 rounded-md text-xs font-semibold transition-colors">
+        Confused Deputy (Scope Escalation)
+      </button>
+      <button id="btn-mode-tamper" onclick="setScenario('tamper')" class="px-3 py-1.5 rounded-md text-xs font-semibold transition-colors">
+        MITM Cipher / Key Tamper
+      </button>
+    </div>
+
+    <!-- Simple Prev / Next Step Controls (Steps 1 to 5) -->
+    <div class="flex items-center gap-2">
+      <button onclick="prevStep()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold border border-slate-700 transition-colors">
+        ◀ Prev
+      </button>
+      <div id="step-indicator" class="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs font-semibold mono text-cyan-400 min-w-[95px] text-center">
+        Step 1 / 5
+      </div>
+      <button onclick="nextStep()" class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold transition-colors">
+        Next ▶
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-1 max-w-[1680px] w-full mx-auto px-6 py-4 flex flex-col gap-4">
+
+    <!-- 2. MAIN STAGE (TOP): STATIC-SIZED TWO-BOUNDARY SVG ARCHITECTURE -->
+    <section class="bg-slate-900/70 border border-slate-800 rounded-xl p-4">
+      <!-- Clickable Step Pills Bar -->
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2.5 border-b border-slate-800/80">
+        <div id="step-buttons" class="flex flex-wrap items-center gap-1.5"></div>
+        <div id="verdict-badge" class="text-xs mono font-semibold px-3 py-1 rounded-md border"></div>
+      </div>
+
+      <!-- Static SVG Canvas -->
+      <div class="w-full overflow-x-auto">
+        <svg viewBox="0 0 1120 265" class="w-full h-auto min-w-[880px] block">
+          <defs>
+            <marker id="arrow-muted" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 9 5 L 0 9 z" fill="#475569"/>
+            </marker>
+            <marker id="arrow-cyan" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 9 5 L 0 9 z" fill="#22d3ee"/>
+            </marker>
+            <marker id="arrow-emerald" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 9 5 L 0 9 z" fill="#10b981"/>
+            </marker>
+            <marker id="arrow-rose" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 9 5 L 0 9 z" fill="#f43f5e"/>
+            </marker>
+
+            <!-- Static Glow Filters (Zero Scaling) -->
+            <filter id="glow-cyan" x="-15%" y="-15%" width="130%" height="130%">
+              <feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#22d3ee" flood-opacity="0.35"/>
+            </filter>
+            <filter id="glow-emerald" x="-15%" y="-15%" width="130%" height="130%">
+              <feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#10b981" flood-opacity="0.35"/>
+            </filter>
+            <filter id="glow-rose" x="-15%" y="-15%" width="130%" height="130%">
+              <feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#f43f5e" flood-opacity="0.5"/>
+            </filter>
+          </defs>
+
+          <!-- LEFT: TRUST BOUNDARY A -->
+          <rect x="12" y="10" width="490" height="245" rx="10" fill="#0f172a" stroke="#1e40af" stroke-width="1.5" stroke-dasharray="5 4"/>
+          <text x="26" y="30" fill="#60a5fa" font-size="11" font-weight="700" class="mono">
+            TRUST BOUNDARY A (VPC Perimeter A + Cloud KMS A: PrivKey_A)
+          </text>
+
+          <!-- RIGHT: TRUST BOUNDARY B -->
+          <rect x="618" y="10" width="490" height="245" rx="10" fill="#0f172a" stroke="#5b21b6" stroke-width="1.5" stroke-dasharray="5 4"/>
+          <text x="632" y="30" fill="#c084fc" font-size="11" font-weight="700" class="mono">
+            TRUST BOUNDARY B (VPC Perimeter B + Cloud KMS B: PrivKey_B)
+          </text>
+
+          <!-- CENTER DIVIDER: CROSS-BOUNDARY A2A mTLS + JWE/JWS -->
+          <line x1="560" y1="8" x2="560" y2="255" stroke="#f59e0b" stroke-width="2" stroke-dasharray="4 4"/>
+          <rect x="509" y="106" width="102" height="44" rx="6" fill="#090d16" stroke="#f59e0b" stroke-width="1.5"/>
+          <text x="560" y="124" text-anchor="middle" fill="#fbbf24" font-size="9.5" font-weight="700" class="mono">Cross-Boundary</text>
+          <text x="560" y="139" text-anchor="middle" fill="#cbd5e1" font-size="8.5" class="mono">A2A mTLS + JWE/JWS</text>
+
+          <!-- PUBLIC KEY EXCHANGE ARC -->
+          <path d="M 380 54 Q 560 16 740 54" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3 3"/>
+          <rect x="435" y="18" width="250" height="20" rx="4" fill="#090d16" stroke="#0284c7" stroke-width="1"/>
+          <text x="560" y="32" text-anchor="middle" fill="#38bdf8" font-size="9.5" font-weight="600" class="mono">
+            PubKey_A (JWKS) ⇄ PubKey_B (AgentCard)
+          </text>
+
+          <!-- NODE 1: USER & ROOT MANDATE (H0) -->
+          <g onclick="goToStep(0)" class="cursor-pointer">
+            <rect id="node-1" class="svg-node" x="28" y="54" width="200" height="96" rx="8" fill="#111827" stroke="#334155" stroke-width="2"/>
+            <text x="128" y="75" text-anchor="middle" fill="#93c5fd" font-size="10" font-weight="700" class="mono">1. USER &amp; ROOT MANDATE (H₀)</text>
+            <text x="128" y="95" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="600">Root Entry Gateway</text>
+            <text x="128" y="114" text-anchor="middle" fill="#94a3b8" font-size="10" class="mono">Signs H₀ w/ PrivKey_A</text>
+            <text x="128" y="133" text-anchor="middle" fill="#34d399" font-size="10" class="mono">Scope: read:dept_42</text>
+          </g>
+
+          <!-- NODE 2: ORCHESTRATOR AGENT A (A2A CLIENT) -->
+          <g onclick="goToStep(1)" class="cursor-pointer">
+            <rect id="node-2" class="svg-node" x="280" y="54" width="205" height="96" rx="8" fill="#111827" stroke="#334155" stroke-width="2"/>
+            <text x="382" y="75" text-anchor="middle" fill="#93c5fd" font-size="10" font-weight="700" class="mono">2. ORCHESTRATOR AGENT A</text>
+            <text x="382" y="95" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="600">A2A Client (before_tool)</text>
+            <text x="382" y="114" text-anchor="middle" fill="#94a3b8" font-size="10" class="mono">Signs H₁ w/ PrivKey_A</text>
+            <text id="node-2-sub" x="382" y="133" text-anchor="middle" fill="#fbbf24" font-size="10" class="mono">Wraps DEK w/ PubKey_B</text>
+          </g>
+
+          <!-- NODE 3: REMOTE AGENT B (A2A SERVER PEP) -->
+          <g onclick="goToStep(3)" class="cursor-pointer">
+            <rect id="node-3" class="svg-node" x="635" y="54" width="215" height="96" rx="8" fill="#111827" stroke="#334155" stroke-width="2"/>
+            <text x="742" y="75" text-anchor="middle" fill="#c084fc" font-size="10" font-weight="700" class="mono">3. REMOTE AGENT B (PEP)</text>
+            <text x="742" y="95" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="600">A2A Server (before_agent)</text>
+            <text x="742" y="114" text-anchor="middle" fill="#94a3b8" font-size="10" class="mono">Verifies H₀→H₁ w/ PubKey_A</text>
+            <text id="node-3-sub" x="742" y="133" text-anchor="middle" fill="#38bdf8" font-size="10" class="mono">Unwraps DEK w/ PrivKey_B</text>
+          </g>
+
+          <!-- NODE 4: PROTECTED FINANCE DB -->
+          <g onclick="goToStep(4)" class="cursor-pointer">
+            <rect id="node-4" class="svg-node" x="895" y="54" width="195" height="96" rx="8" fill="#111827" stroke="#334155" stroke-width="2"/>
+            <text x="992" y="75" text-anchor="middle" fill="#34d399" font-size="10" font-weight="700" class="mono">4. PROTECTED FINANCE DB</text>
+            <text x="992" y="95" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="600">Dept-42 Ledger Store</text>
+            <text x="992" y="114" text-anchor="middle" fill="#94a3b8" font-size="10" class="mono">Executes Verified Query</text>
+            <text id="node-4-sub" x="992" y="133" text-anchor="middle" fill="#cbd5e1" font-size="10" class="mono">Signs Return Artifact H₂</text>
+          </g>
+
+          <!-- STATIC KMS HARDWARE BOXES -->
+          <!-- Cloud KMS A -->
+          <rect id="kms-a" class="svg-node" x="155" y="185" width="235" height="52" rx="6" fill="#090d16" stroke="#1e3a8a" stroke-width="1.5"/>
+          <text x="272" y="206" text-anchor="middle" fill="#60a5fa" font-size="10" font-weight="700" class="mono">🔒 Cloud KMS A (PrivKey_A: Ed25519)</text>
+          <text x="272" y="223" text-anchor="middle" fill="#64748b" font-size="9.5" class="mono">Hardware-Locked Inside Boundary A</text>
+
+          <!-- Cloud KMS B -->
+          <rect id="kms-b" class="svg-node" x="730" y="185" width="235" height="52" rx="6" fill="#090d16" stroke="#4c1d95" stroke-width="1.5"/>
+          <text x="847" y="206" text-anchor="middle" fill="#c084fc" font-size="10" font-weight="700" class="mono">🔒 Cloud KMS B (PrivKey_B: ECDH/RSA)</text>
+          <text x="847" y="223" text-anchor="middle" fill="#64748b" font-size="9.5" class="mono">Hardware-Locked Inside Boundary B</text>
+
+          <!-- KMS Connectors -->
+          <line x1="210" y1="185" x2="155" y2="150" stroke="#1e3a8a" stroke-width="1.5" stroke-dasharray="3 3"/>
+          <line x1="330" y1="185" x2="365" y2="150" stroke="#1e3a8a" stroke-width="1.5" stroke-dasharray="3 3"/>
+          <line x1="810" y1="185" x2="755" y2="150" stroke="#4c1d95" stroke-width="1.5" stroke-dasharray="3 3"/>
+          <line x1="910" y1="185" x2="965" y2="150" stroke="#4c1d95" stroke-width="1.5" stroke-dasharray="3 3"/>
+
+          <!-- DATA FLOW EDGES -->
+          <!-- Edge 1: Node 1 -> Node 2 -->
+          <line id="edge-1" x1="228" y1="102" x2="276" y2="102" stroke="#475569" stroke-width="2.5" marker-end="url(#arrow-muted)"/>
+          <!-- Edge 2: Node 2 -> Node 3 (Cross-Boundary) -->
+          <line id="edge-2" x1="485" y1="95" x2="508" y2="95" stroke="#475569" stroke-width="2.5"/>
+          <line id="edge-2b" x1="612" y1="95" x2="631" y2="95" stroke="#475569" stroke-width="2.5" marker-end="url(#arrow-muted)"/>
+          <!-- Edge 3: Node 3 -> Node 4 -->
+          <line id="edge-3" x1="850" y1="102" x2="891" y2="102" stroke="#475569" stroke-width="2.5" marker-end="url(#arrow-muted)"/>
+        </svg>
+      </div>
+    </section>
+
+    <!-- 3. CONCISE STEP BANNER (MIDDLE): STATIC HEIGHT, 2-SENTENCE EXPLANATION -->
+    <section id="step-banner" class="bg-slate-900/90 border border-slate-800 rounded-xl px-5 py-3.5 min-h-[82px] flex flex-col justify-center">
+      <div class="flex items-center gap-2.5 mb-1">
+        <span id="banner-step-tag" class="text-xs font-bold mono uppercase px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+          STEP 1
+        </span>
+        <h2 id="banner-title" class="text-sm md:text-base font-bold text-white"></h2>
+      </div>
+      <p id="banner-desc" class="text-xs md:text-sm text-slate-300 leading-relaxed"></p>
+    </section>
+
+    <!-- 4. BOTTOM SPLIT (2 CLEAN STATIC PANELS SIDE-BY-SIDE) -->
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1">
+
+      <!-- LEFT BOTTOM PANEL (6 COLS): CRYPTOGRAPHIC LEDGER CHAIN (H0 -> H1 -> H2) -->
+      <div class="lg:col-span-6 bg-slate-900/70 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300 mono">
+              Cryptographic Ledger Chain (H₀ → H₁ → H₂)
+            </h3>
+            <span class="text-[11px] mono text-slate-400">Asymmetric Sign + JWE Key Wrap</span>
+          </div>
+          <div id="ledger-cards" class="grid grid-cols-1 md:grid-cols-3 gap-3"></div>
+        </div>
+
+        <div id="chain-equation" class="mt-3 pt-2.5 border-t border-slate-800 flex items-center justify-between text-xs mono text-slate-400">
+          <span>Key Rule: Private Keys never cross boundaries</span>
+          <span class="text-cyan-400">Verify(PubKey_A) + Decrypt(PrivKey_B)</span>
+        </div>
+      </div>
+
+      <!-- RIGHT BOTTOM PANEL (6 COLS): BOUNDARY B PEP CHECKS + COMPACT A2A PAYLOAD -->
+      <div class="lg:col-span-6 bg-slate-900/70 border border-slate-800 rounded-xl p-4 flex flex-col justify-between gap-3">
+        <div>
+          <div class="flex items-center justify-between mb-2.5 pb-2 border-b border-slate-800">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300 mono">
+              Boundary B Policy Enforcement Point (before_agent_callback)
+            </h3>
+            <span class="text-[11px] mono text-purple-300">4 Deterministic Zero Trust Checks</span>
+          </div>
+          <!-- 4 Deterministic Checks Grid -->
+          <div id="pep-checklist" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+        </div>
+
+        <!-- Compact A2A JSON-RPC Metadata Payload -->
+        <div>
+          <div class="text-[11px] mono text-slate-400 mb-1 flex items-center justify-between">
+            <span>A2A JSON-RPC Envelope (params.metadata.x-adk-attestation-ledger)</span>
+            <span id="payload-tag" class="text-emerald-400">JWE + Ed25519</span>
+          </div>
+          <pre id="json-payload" class="p-3 rounded-lg bg-slate-950 border border-slate-800 mono text-[11px] text-slate-200 overflow-x-auto leading-snug"></pre>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <script>
+    let currentScenario = 'valid'; // 'valid' | 'attack' | 'tamper'
+    let currentStep = 0; // 0 to 4
+
+    const STEPS = [
+      {
+        num: "Step 1",
+        short: "1. Root Mandate (H₀)",
+        title: "Origin Mandate Signing (Cloud KMS A) & Public Key Discovery",
+        nodes: [1],
+        kmsA: true,
+        kmsB: false,
+        edges: [],
+        desc: {
+          valid: "The Root Gateway in Boundary A hashes the user's prompt and signs Block H₀ (Scope: read:dept_42) using PrivKey_A inside Cloud KMS A. Simultaneously, Orchestrator Agent A reads Remote Agent B's Public Encryption Key (PubKey_B) from Agent B's /.well-known/agent.json.",
+          attack: "The Root Gateway signs a strictly read-only Mandate H₀ (Scope: read:dept_42) using PrivKey_A in Cloud KMS A. Because PrivKey_A is hardware-locked in KMS, no downstream agent can alter this root scope ceiling.",
+          tamper: "The Root Gateway signs Block H₀ using PrivKey_A in Cloud KMS A, anchoring the initial prompt digest and sequence nonce. Agent A fetches Agent B's Public Key (PubKey_B) from its AgentCard for envelope encryption."
+        }
+      },
+      {
+        num: "Step 2",
+        short: "2. Sign H₁ & Wrap DEK",
+        title: "Outbound A2A Hook: Sign H₁ with PrivKey_A & Wrap DEK with PubKey_B",
+        nodes: [2],
+        kmsA: true,
+        kmsB: false,
+        edges: ['edge-1'],
+        desc: {
+          valid: "Inside Agent A's before_tool_callback, Agent A encrypts the A2A message with a one-time AES-256 Data Encryption Key (DEK) and wraps that DEK using Boundary B's Public Key (PubKey_B). Agent A then signs Handoff Block H₁ using its own Private Key (PrivKey_A) over H₀ and the plaintext SHA-256 digest.",
+          attack: "Indirect prompt injection compromises Orchestrator Agent A, tricking it into requesting 'admin:export_all' inside the A2A handoff block H₁. Agent A signs H₁ with its own key and wraps the DEK with PubKey_B, but it cannot forge a new Root Mandate H₀.",
+          tamper: "Orchestrator Agent A legitimately signs H₁ with PrivKey_A and wraps the ephemeral AES-256 DEK using Agent B's Public Key (PubKey_B). The signed digest of the plaintext payload is locked inside Block H₁."
+        }
+      },
+      {
+        num: "Step 3",
+        short: "3. Cross-Boundary Transit",
+        title: "Cross-Boundary A2A JSON-RPC Transit Over mTLS",
+        nodes: [2, 3],
+        kmsA: false,
+        kmsB: false,
+        edges: ['edge-2', 'edge-2b'],
+        desc: {
+          valid: "The A2A 'tasks/send' request crosses from VPC Perimeter A to VPC Perimeter B carrying the JWE ciphertext, the Wrapped_DEK, and the signed H₀ → H₁ ledger metadata. No private keys ever cross the boundary—only public-key verifiable proofs.",
+          attack: "The malicious A2A 'tasks/send' request crosses the perimeter with valid transport mTLS credentials, attempting to use Remote Agent B as a Confused Deputy to export all financial records.",
+          tamper: "While crossing the boundary, a Man-in-the-Middle attacker intercepts the packet and modifies the encrypted payload ciphertext (or swaps the wrapped DEK) without possessing PrivKey_A."
+        }
+      },
+      {
+        num: "Step 4",
+        short: "4. Boundary B PEP Verify",
+        title: "Inbound PEP (before_agent_callback): Verify with PubKey_A & Decrypt with PrivKey_B",
+        nodes: [3],
+        kmsA: false,
+        kmsB: true,
+        edges: ['edge-2', 'edge-2b'],
+        desc: {
+          valid: "Remote Agent B's before_agent_callback verifies the H₀ → H₁ signatures using Boundary A's Public Key (PubKey_A via JWKS) and checks that Scope_1 ⊆ Scope_0. It then calls its own local Cloud KMS B (PrivKey_B) to unwrap the DEK, decrypts the payload, and confirms the SHA-256 hash matches H₁.",
+          attack: "BLOCKED AT PEP: Remote Agent B verifies the signatures with PubKey_A and unwraps the DEK with PrivKey_B, but Deterministic Check #4 FAILS because H₁ scope ('admin:export_all') is not a subset of Root Mandate H₀ ('read:dept_42'). Execution halts immediately before Agent B's LLM is invoked.",
+          tamper: "BLOCKED AT PEP: Remote Agent B attempts to unwrap the DEK using local Cloud KMS B (PrivKey_B) and compare the decrypted payload hash against H₁'s signed digest. Because the ciphertext was modified in transit, the AES-GCM tag and SHA-256 digest checks fail immediately."
+        }
+      },
+      {
+        num: "Step 5",
+        short: "5. DB Execution & H₂",
+        title: "Protected Resource Execution & Signed Artifact Return (H₂)",
+        nodes: [3, 4],
+        kmsA: false,
+        kmsB: true,
+        edges: ['edge-3'],
+        desc: {
+          valid: "With all 4 Zero Trust checks verified, Remote Agent B queries the Protected Finance DB for dept_42. It signs Return Block H₂ using PrivKey_B and wraps the response artifact with PubKey_A for safe return to Boundary A.",
+          attack: "BLAST RADIUS CONTAINED: Because the Confused Deputy scope escalation was rejected at Step 4's before_agent_callback, the Protected Finance DB is never queried and zero LLM tokens are consumed in Boundary B.",
+          tamper: "BLAST RADIUS CONTAINED: Because the tampered ciphertext was rejected at Step 4's before_agent_callback perimeter, the Protected Finance DB remains completely untouched."
+        }
+      }
+    ];
+
+    function setScenario(mode) {
+      currentScenario = mode;
+      // If switching to attack/tamper on early steps, jump to Step 4 so the user sees the enforcement immediately, or keep current step if >= 1
+      if (mode !== 'valid' && currentStep === 0) {
+        currentStep = 3;
+      }
+      render();
+    }
+
+    function goToStep(idx) {
+      currentStep = idx;
+      render();
+    }
+
+    function nextStep() {
+      currentStep = (currentStep + 1) % STEPS.length;
+      render();
+    }
+
+    function prevStep() {
+      currentStep = (currentStep - 1 + STEPS.length) % STEPS.length;
+      render();
+    }
+
+    function render() {
+      const step = STEPS[currentStep];
+      const isAttack = currentScenario === 'attack';
+      const isTamper = currentScenario === 'tamper';
+      const isFailureStep = (isAttack || isTamper) && currentStep >= 3;
+
+      // 1. Update Header Scenario Buttons
+      const activeModeCls = {
+        valid: "px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40",
+        attack: "px-3 py-1.5 rounded-md text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40",
+        tamper: "px-3 py-1.5 rounded-md text-xs font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40"
+      };
+      const inactiveModeCls = "px-3 py-1.5 rounded-md text-xs font-semibold text-slate-400 hover:text-slate-200 border border-transparent";
+
+      document.getElementById('btn-mode-valid').className = currentScenario === 'valid' ? activeModeCls.valid : inactiveModeCls;
+      document.getElementById('btn-mode-attack').className = currentScenario === 'attack' ? activeModeCls.attack : inactiveModeCls;
+      document.getElementById('btn-mode-tamper').className = currentScenario === 'tamper' ? activeModeCls.tamper : inactiveModeCls;
+
+      // 2. Step Indicator & Step Buttons
+      document.getElementById('step-indicator').textContent = `Step ${currentStep + 1} / 5`;
+      document.getElementById('step-buttons').innerHTML = STEPS.map((s, idx) => {
+        const isCurrent = idx === currentStep;
+        const isDone = idx < currentStep;
+        let cls = "bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700";
+        if (isCurrent) {
+          cls = isFailureStep
+            ? "bg-rose-500/20 text-rose-300 border-rose-500/50 font-semibold"
+            : "bg-cyan-500/20 text-cyan-300 border-cyan-500/50 font-semibold";
+        } else if (isDone) {
+          cls = "bg-slate-900 text-emerald-400 border-emerald-500/30";
+        }
+        return `<button onclick="goToStep(${idx})" class="px-2.5 py-1 rounded-md text-xs mono border transition-colors ${cls}">${s.short}</button>`;
+      }).join('');
+
+      // Verdict Badge
+      const verdictEl = document.getElementById('verdict-badge');
+      if (isFailureStep) {
+        verdictEl.className = "text-xs mono font-semibold px-3 py-1 rounded-md border bg-rose-500/15 text-rose-300 border-rose-500/40";
+        verdictEl.textContent = isAttack
+          ? "🛑 PEP VERDICT: SCOPE ESCALATION BLOCKED"
+          : "🛑 PEP VERDICT: CIPHERTEXT / HASH MISMATCH BLOCKED";
+      } else if ((isAttack && currentStep >= 1) || (isTamper && currentStep >= 2)) {
+        verdictEl.className = "text-xs mono font-semibold px-3 py-1 rounded-md border bg-amber-500/15 text-amber-300 border-amber-500/40";
+        verdictEl.textContent = isAttack
+          ? "⚠️ INJECTED SCOPE: admin:export_all"
+          : "⚡ MITM TAMPERED CIPHERTEXT IN TRANSIT";
+      } else {
+        verdictEl.className = "text-xs mono font-semibold px-3 py-1 rounded-md border bg-emerald-500/15 text-emerald-300 border-emerald-500/40";
+        verdictEl.textContent = "✓ ZTA CHAIN & KMS ENVELOPE VERIFIED";
+      }
+
+      // 3. Update Static SVG Node Borders (NO scaling/growing)
+      [1, 2, 3, 4].forEach(n => {
+        const el = document.getElementById(`node-${n}`);
+        const isActive = step.nodes.includes(n);
+        if (isActive) {
+          if (isFailureStep && (n === 3 || n === 4)) {
+            el.setAttribute('stroke', n === 3 ? '#f43f5e' : '#334155');
+            el.setAttribute('stroke-width', n === 3 ? '2.5' : '2');
+            if (n === 3) el.setAttribute('filter', 'url(#glow-rose)');
+            else el.removeAttribute('filter');
+          } else {
+            el.setAttribute('stroke', '#22d3ee');
+            el.setAttribute('stroke-width', '2.5');
+            el.setAttribute('filter', 'url(#glow-cyan)');
+          }
+        } else {
+          el.setAttribute('stroke', '#334155');
+          el.setAttribute('stroke-width', '2');
+          el.removeAttribute('filter');
+        }
+      });
+
+      // Update Dynamic Subtitles inside Nodes
+      document.getElementById('node-2-sub').textContent = (isAttack && currentStep >= 1)
+        ? "Injects admin:export_all ⚠️"
+        : "Wraps DEK w/ PubKey_B";
+      document.getElementById('node-3-sub').textContent = isFailureStep
+        ? "Drops Request Before LLM 🛑"
+        : "Unwraps DEK w/ PrivKey_B";
+      document.getElementById('node-4-sub').textContent = isFailureStep
+        ? "Untouched (Zero Blast Radius)"
+        : "Signs Return Artifact H₂";
+
+      // KMS Highlighting
+      document.getElementById('kms-a').setAttribute('stroke', step.kmsA ? '#38bdf8' : '#1e3a8a');
+      document.getElementById('kms-b').setAttribute('stroke', step.kmsB ? '#c084fc' : '#4c1d95');
+
+      // Edges Highlighting
+      ['edge-1', 'edge-2', 'edge-2b', 'edge-3'].forEach(id => {
+        const edge = document.getElementById(id);
+        const active = step.edges.includes(id);
+        if (active && !(isFailureStep && id === 'edge-3')) {
+          const isBadEdge = isFailureStep && (id === 'edge-2' || id === 'edge-2b');
+          edge.setAttribute('stroke', isBadEdge ? '#f43f5e' : '#22d3ee');
+          if (id !== 'edge-2') {
+            edge.setAttribute('marker-end', isBadEdge ? 'url(#arrow-rose)' : 'url(#arrow-cyan)');
+          }
+          edge.classList.add('edge-flow');
+        } else {
+          edge.setAttribute('stroke', '#475569');
+          if (id !== 'edge-2') edge.setAttribute('marker-end', 'url(#arrow-muted)');
+          edge.classList.remove('edge-flow');
+        }
+      });
+
+      // 4. Update Middle Concise Step Banner
+      const bannerTag = document.getElementById('banner-step-tag');
+      bannerTag.textContent = `${step.num} OF 5`;
+      bannerTag.className = isFailureStep
+        ? "text-xs font-bold mono uppercase px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40"
+        : "text-xs font-bold mono uppercase px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30";
+      document.getElementById('banner-title').textContent = step.title;
+      document.getElementById('banner-desc').textContent = step.desc[currentScenario];
+
+      // 5. Update Left Bottom Panel: 3 Static Ledger Cards (H0 -> H1 -> H2)
+      const ledgerData = [
+        {
+          title: "Block H₀ (Root Mandate)",
+          signer: "Cloud KMS A (PrivKey_A)",
+          scope: "read:dept_42",
+          jwe: "Plaintext Mandate Digest",
+          badge: "SIGNED (H₀)",
+          bad: false
+        },
+        {
+          title: "Block H₁ (A2A Handoff)",
+          signer: "Agent A (PrivKey_A)",
+          scope: (isAttack && currentStep >= 1) ? "admin:export_all ⚠️" : "read:dept_42",
+          jwe: (isTamper && currentStep >= 2) ? "Ciphertext Tampered ⚡" : "DEK Wrapped w/ PubKey_B",
+          badge: (isAttack && currentStep >= 1) ? "SCOPE ESCALATED" : ((isTamper && currentStep >= 2) ? "TAMPERED" : (currentStep >= 1 ? "SIGNED & WRAPPED" : "PENDING")),
+          bad: (isAttack && currentStep >= 1) || (isTamper && currentStep >= 2)
+        },
+        {
+          title: "Block H₂ (Return Artifact)",
+          signer: "Agent B (PrivKey_B)",
+          scope: isFailureStep ? "HALTED AT PEP" : "read:dept_42 (Result)",
+          jwe: isFailureStep ? "Blocked Before DB/LLM" : (currentStep === 4 ? "DEK Wrapped w/ PubKey_A" : "Awaiting Step 5"),
+          badge: isFailureStep ? "BLOCKED 🛑" : (currentStep === 4 ? "SIGNED (H₂)" : "STANDBY"),
+          bad: isFailureStep
+        }
+      ];
+
+      document.getElementById('ledger-cards').innerHTML = ledgerData.map(c => {
+        const border = c.bad ? "border-rose-500/60 bg-rose-950/15" : "border-slate-800 bg-slate-950/80";
+        const badgeStyle = c.bad
+          ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+          : "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
+        return `
+          <div class="p-3 rounded-lg border ${border} flex flex-col justify-between gap-2">
+            <div>
+              <div class="flex items-center justify-between gap-1 mb-2">
+                <span class="text-xs font-bold text-white mono">${c.title}</span>
+              </div>
+              <div class="space-y-1 text-[11px] mono">
+                <div class="flex justify-between"><span class="text-slate-500">Signer:</span><span class="text-sky-300">${c.signer}</span></div>
+                <div class="flex justify-between"><span class="text-slate-500">Scope:</span><span class="${c.bad ? 'text-rose-300 font-semibold' : 'text-emerald-300'}">${c.scope}</span></div>
+                <div class="flex justify-between"><span class="text-slate-500">JWE:</span><span class="text-amber-300">${c.jwe}</span></div>
+              </div>
+            </div>
+            <div class="pt-2 border-t border-slate-800/80 flex justify-end">
+              <span class="text-[10px] mono font-semibold px-2 py-0.5 rounded border ${badgeStyle}">${c.badge}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // 6. Update Right Bottom Panel: 4 Live Deterministic PEP Checks + Compact JSON
+      const checks = [
+        {
+          id: "1. Signature Chain (PubKey_A)",
+          pass: true,
+          msg: "Ed25519 Verify(H₀ → H₁) OK"
+        },
+        {
+          id: "2. Local KMS Unwrap (PrivKey_B)",
+          pass: !(isTamper && currentStep >= 3),
+          msg: (isTamper && currentStep >= 3) ? "AES-GCM Auth Tag Failed" : "Unwrapped DEK in KMS B"
+        },
+        {
+          id: "3. Plaintext SHA-256 Match",
+          pass: !(isTamper && currentStep >= 3),
+          msg: (isTamper && currentStep >= 3) ? "Digest ≠ Signed H₁ Hash" : "Matches Signed H₁ Digest"
+        },
+        {
+          id: "4. Monotonic Scope (Scope₁ ⊆ Scope₀)",
+          pass: !(isAttack && currentStep >= 3),
+          msg: (isAttack && currentStep >= 3) ? "admin:export_all ⊈ read:dept_42" : "read:dept_42 ⊆ read:dept_42"
+        }
+      ];
+
+      document.getElementById('pep-checklist').innerHTML = checks.map(ch => {
+        const cls = ch.pass
+          ? "border-emerald-800/60 bg-emerald-950/20 text-emerald-300"
+          : "border-rose-500/80 bg-rose-950/40 text-rose-300 font-semibold";
+        return `
+          <div class="px-3 py-2 rounded-lg border text-xs mono flex flex-col justify-between ${cls}">
+            <div class="flex items-center justify-between">
+              <span>${ch.id}</span>
+              <span>${ch.pass ? 'PASS ✓' : 'FAIL ✗'}</span>
+            </div>
+            <div class="text-[10px] text-slate-400 mt-0.5">${ch.msg}</div>
+          </div>
+        `;
+      }).join('');
+
+      const delegatedScope = (isAttack && currentStep >= 1) ? '["admin:export_all"]' : '["read:dept_42"]';
+      const cipherStatus = (isTamper && currentStep >= 2) ? '"TAMPERED_CIPHERTEXT_0x99f"' : '"AES256_GCM(SELECT * FROM dept_42)"';
+      document.getElementById('json-payload').textContent = `{
+  "jwe_envelope": { "kid": "kms-b://PubKey_B", "wrapped_dek": "ECDH_Wrap(PubKey_B, DEK)", "ciphertext": ${cipherStatus} },
+  "attestation": { "h0_root": "0x8f4a..91c2", "h1_parent": "0x8f4a..91c2", "root_scope": ["read:dept_42"], "delegated_scope": ${delegatedScope}, "sig": "Ed25519_Sign(PrivKey_A)" }
+}`;
+    }
+
+    // Keyboard navigation (Left / Right arrows)
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') nextStep();
+      if (e.key === 'ArrowLeft') prevStep();
+    });
+
+    render();
+  </script>
+</body>
+</html>
